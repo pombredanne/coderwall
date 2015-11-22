@@ -19,9 +19,14 @@
 #  boost_factor        :float            default(1.0)
 #  inappropriate       :integer          default(0)
 #  likes_count         :integer          default(0)
-#  slug                :string(255)
+#  slug                :string(255)      not null
+#  user_name           :string(255)
+#  user_email          :string(255)
+#  user_agent          :string(255)
+#  user_ip             :inet
+#  spam_reports_count  :integer          default(0)
+#  state               :string(255)      default("active")
 #
-
 
 require 'net_validators'
 require 'open-uri'
@@ -40,11 +45,13 @@ class Protip < ActiveRecord::Base
   include Tire::Model::Search
   include Scoring::HotStream
   include SearchModule
-  include Rakismet::Model
-
-  acts_as_commentable
 
   include ProtipMapping
+  include AuthorDetails
+  include SpamFilter
+
+  include ProtipNetworkable
+  include ProtipOwnership
 
   paginates_per(PAGESIZE = 18)
 
@@ -52,15 +59,9 @@ class Protip < ActiveRecord::Base
 
   has_many :likes, as: :likable, dependent: :destroy, after_add: :reset_likes_cache, after_remove: :reset_likes_cache
   has_many :protip_links, autosave: true, dependent: :destroy, after_add: :reset_links_cache, after_remove: :reset_links_cache
-  has_one :spam_report, as: :spammable
   belongs_to :user , autosave: true
+  has_many :comments, :dependent => :destroy
 
-  rakismet_attrs  author: proc { self.user.name },
-    author_email: proc { self.user.email },
-    content: :body,
-    blog: ENV['AKISMET_URL'],
-    user_ip: proc { self.user.last_ip },
-    user_agent: proc { self.user.last_ua }
 
   acts_as_taggable_on :topics, :users
   attr_accessor :upvotes
@@ -107,15 +108,14 @@ class Protip < ActiveRecord::Base
   # Begin these three lines fail the test
   after_save :index_search
   after_destroy :index_search_after_destroy
-  after_create :update_network
-  after_create :analyze_spam
+
   # End of test failing lines
 
   attr_accessor :upvotes_value
 
 
-  scope :random, ->(count) { order("RANDOM()").limit(count) }
-  scope :recent, ->(count) { order("created_at DESC").limit(count) }
+  scope :random, ->(count=1) { order("RANDOM()").limit(count) }
+  scope :recent, ->(count= 1) { order("created_at DESC").limit(count) }
   scope :for, ->(userlist) { where(user: userlist.map(&:id)) }
   scope :most_upvotes, ->(count) { joins(:likes).select(['protips.*', 'SUM(likes.value) AS like_score']).group(['likes.likable_id', 'protips.id']).order('like_score DESC').limit(count) }
   scope :any_topics, ->(topics_list) { where(id: select('DISTINCT protips.id').joins(taggings: :tag).where('tags.name IN (?)', topics_list)) }
@@ -124,9 +124,23 @@ class Protip < ActiveRecord::Base
 
   scope :for_topic, ->(topic) { any_topics([topic]) }
 
-  scope :with_upvotes, joins("INNER JOIN (#{Like.select('likable_id, SUM(likes.value) as upvotes').where(likable_type: 'Protip').group([:likable_type, :likable_id]).to_sql}) AS upvote_scores ON upvote_scores.likable_id=protips.id")
-  scope :trending, order('score DESC')
-  scope :flagged, where(flagged: true)
+  scope :with_upvotes, -> { joins("INNER JOIN (#{Like.select('likable_id, SUM(likes.value) as upvotes').where(likable_type: 'Protip').group([:likable_type, :likable_id]).to_sql}) AS upvote_scores ON upvote_scores.likable_id=protips.id") }
+  scope :trending, -> { order(:score).reverse_order }
+  scope :flagged, -> { where(state: :reported) }
+
+  state_machine initial: :active do
+    event :report_spam do
+      transition active: :reported_as_spam
+    end
+
+    event :mark_as_spam do
+      transition any => :marked_as_spam
+    end
+
+    after_transition any => :marked_as_spam do |protip|
+      protip.spam!
+    end
+  end
 
   class << self
 
@@ -148,7 +162,7 @@ class Protip < ActiveRecord::Base
         dynamic_trending = trending_protips.flat_map { |p| p.tags }.reduce(Hash.new(0)) { |h, tag| h.tap { |h| h[tag] += 1 } }.sort { |a1, a2| a2[1] <=> a1[1] }.map { |entry| entry[0] }.reject { |tag| User.where(username: tag).any? }
         ((static_trending || []) + dynamic_trending).uniq
       else
-        Tag.last(20).map(&:name).reject { |name| User.exists?(username: name) }
+        ActsAsTaggableOn::Tag.last(20).map(&:name).reject { |name| User.exists?(username: name) }
       end
     end
 
@@ -367,19 +381,6 @@ class Protip < ActiveRecord::Base
     self.tire.update_index
   end
 
-
-  def networks
-    Network.tagged_with(self.topic_list)
-  end
-
-  def orphan?
-    self.networks.blank?
-  end
-
-  def update_network(event=:new_protip)
-    ::UpdateNetworkJob.perform_async(event, public_id, score)
-  end
-
   def generate_event(options={})
     unless self.created_automagically? and self.topic_list.include?("github")
       event_type = self.event_type(options)
@@ -446,7 +447,7 @@ class Protip < ActiveRecord::Base
             likes: comment.likes_cache
           }
         end,
-        networks:              networks.map(&:name).map(&:downcase).join(","),
+        networks:              networks.pluck(:slug).join(','),
         best_stat:             Hash[*[:name, :value].zip(best_stat.to_a).flatten],
         team:                  user && user.team && {
           name:         user.team.name,
@@ -554,7 +555,6 @@ class Protip < ActiveRecord::Base
     unless how_much.nil?
       self.upvotes_value= (self.upvotes_value + how_much)
       recalculate_score!
-      update_network(:protip_upvote)
     end
     self.save(validate: false)
   end
@@ -861,12 +861,6 @@ class Protip < ActiveRecord::Base
     end if need_to_extract_data_from_links
   end
 
-  def owned_by?(user)
-    self.user == user
-  end
-
-  alias_method :owner?, :owned_by?
-
   def tag_user
     self.user_list = [self.user.try(:username)] if self.users.blank?
   end
@@ -999,9 +993,4 @@ class Protip < ActiveRecord::Base
   def adjust_like_value(user, like_value)
     user.is_a?(User) && self.author.team_member_of?(user) ? [like_value/2, 1].max : like_value
   end
-
-  def analyze_spam
-    AnalyzeSpamJob.perform_async({ id: id, klass: self.class.name })
-  end
-
 end

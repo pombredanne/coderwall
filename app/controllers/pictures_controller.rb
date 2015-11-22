@@ -1,6 +1,8 @@
 class PicturesController < ApplicationController
+
+  # POST                  /users/:user_id/pictures(.:format)
   def create
-    @picture = Picture.create!(file: params[:picture], user: current_user)
-    return render json: @picture.to_json
+    picture = current_user.create_picture(file: params[:picture])
+    render json: picture
   end
 end

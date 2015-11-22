@@ -1,0 +1,6 @@
+- content_for :javascript, javascript_include_tag('username-validation')
+- content_for :mixpanel, record_view_event('settings')
+- content_for :body_id, 'member-settings'
+
+.container.edit_tabs
+  =render 'users/edit'

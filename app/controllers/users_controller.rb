@@ -2,6 +2,9 @@ class UsersController < ApplicationController
   after_action :track_referrer, only: :show
   skip_before_action :require_registration, only: [:edit, :update]
 
+  layout 'coderwallv2', only: :edit
+
+  # GET                   /users/new(.:format)
   def new
     return redirect_to(destination_url) if signed_in?
     return redirect_to(new_session_url) if oauth.blank?
@@ -9,7 +12,16 @@ class UsersController < ApplicationController
     @user = User.for_omniauth(oauth)
   end
 
-  # /:username
+  # GET                   /github/:username(.:format)
+  # GET                   /twitter/:username(.:format)
+  # GET                   /forrst/:username(.:format)
+  # GET                   /dribbble/:username(.:format)
+  # GET                   /linkedin/:username(.:format)
+  # GET                   /codeplex/:username(.:format)
+  # GET                   /bitbucket/:username(.:format)
+  # GET                   /stackoverflow/:username(.:format)
+  # GET                   /:username(.:format)
+  # GET                   /users/:id(.:format)
   def show
     @user = User.find_by_username!(params[:username])
 
@@ -47,6 +59,7 @@ class UsersController < ApplicationController
     end
   end
 
+  # GET                   /users(.:format)
   def index
     if signed_in? && current_user.admin?
       return redirect_to(admin_root_url)
@@ -57,6 +70,7 @@ class UsersController < ApplicationController
     end
   end
 
+  # POST                  /users(.:format)
   def create
     @user = User.for_omniauth(oauth)
 
@@ -80,6 +94,7 @@ class UsersController < ApplicationController
     end
   end
 
+  # GET                   /settings(.:format)
   def edit
     respond_to do |format|
       format.json do
@@ -98,6 +113,7 @@ class UsersController < ApplicationController
     end
   end
 
+  # PUT                   /users/:id(.:format)
   def update
 
     user_id = params[:id]
@@ -114,13 +130,31 @@ class UsersController < ApplicationController
       flash.now[:notice] = "There were issues updating your profile."
     end
 
-    if admin_of_premium_team?
-      redirect_to(teamname_url(slug: @user.team.slug, full: :preview))
-    else
-      redirect_to(edit_user_url(@user))
+    respond_to do |format|
+      format.js
+      format.html do
+        if admin_of_premium_team?
+          redirect_to(teamname_url(slug: @user.team.slug, full: :preview))
+        else
+          redirect_to(edit_user_url(@user))
+        end
+      end
     end
+
   end
 
+  # POST                  /users/teams_update/:membership_id(.:format)
+  def teams_update
+    membership=Teams::Member.find(params['membership_id'])
+    if membership.update_attributes(teams_member)
+      flash.now[:notice] = "The changes have been applied to your profile."
+    else
+      flash.now[:notice] = "There were issues updating your profile."
+    end
+    redirect_to(edit_user_url(membership.user))
+  end
+
+  # GET                   /users/autocomplete(.:format)
   def autocomplete
     autocomplete_params = params.permit(:query)
     respond_to do |f|
@@ -141,14 +175,7 @@ class UsersController < ApplicationController
     end
   end
 
-  def refresh
-    refresh_params = params.permit(:username)
-    user = User.find_by_username(refresh_params[:username])
-    RefreshUserJob.perform_async(user.id, true)
-    flash[:notice] = "Queued #{refresh_params[:username]} for a refresh"
-    redirect_to :back
-  end
-
+  # GET                   /roll-the-dice(.:format)
   def randomize
     random_user = User.random.first
     if random_user
@@ -158,6 +185,7 @@ class UsersController < ApplicationController
     end
   end
 
+  # POST                  /users/:id/specialties(.:format)
   def specialties
     @user = current_user
     specialties = params.permit(:specialties)
@@ -165,17 +193,7 @@ class UsersController < ApplicationController
     redirect_to badge_url(@user.username)
   end
 
-  def delete_account
-    return head(:forbidden) unless signed_in?
-  end
-
-  def delete_account_confirmed
-    user = User.find(current_user.id)
-    user.destroy
-    sign_out
-    redirect_to root_url
-  end
-
+  # GET                   /clear/:id/:provider(.:format)
   def clear_provider
     return head(:forbidden) unless current_user.admin?
 
@@ -188,17 +206,6 @@ class UsersController < ApplicationController
     redirect_to(badge_url(username: @user.username))
   end
 
-  def destroy
-    return head(:forbidden) unless current_user.admin?
-
-    destroy_params = params.permit(:id)
-
-    @user = User.find(destroy_params[:id])
-    @user.destroy
-    record_event('deleted account')
-    redirect_to badge_url(@user.username)
-  end
-
   def settings
     if signed_in?
       record_event("api key requested", username: current_user.username, site: request.env["REMOTE_HOST"])
@@ -208,6 +215,14 @@ class UsersController < ApplicationController
     end
   end
 
+  # POST                  /github/unlink(.:format)
+  # POST                  /twitter/unlink(.:format)
+  # POST                  /forrst/unlink(.:format)
+  # POST                  /dribbble/unlink(.:format)
+  # POST                  /linkedin/unlink(.:format)
+  # POST                  /codeplex/unlink(.:format)
+  # POST                  /bitbucket/unlink(.:format)
+  # POST                  /stackoverflow/unlink(.:format)
   def unlink_provider
     return head(:forbidden) unless signed_in?
 
@@ -243,6 +258,10 @@ class UsersController < ApplicationController
 
   def oauth
     session["oauth.data"]
+  end
+
+  def teams_member
+    params.require(:teams_member).permit(:title,:team_avatar,:team_banner)
   end
 
   def user_edit_params

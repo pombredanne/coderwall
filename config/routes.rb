@@ -1,7 +1,7 @@
 # == Route Map
 #
-#                             GET                   /.json(.:format)                                       #<Proc:0x00000008e12370@/home/vagrant/web/config/routes.rb:270>
-#                             GET                   /teams/.json(.:format)                                 #<Proc:0x00000008e324e0@/home/vagrant/web/config/routes.rb:271>
+#                             GET                   /.json(.:format)                                       #<Proc:0x007f8ea9ae9d60@/home/abdelkader/RubymineProjects/coderwall/config/routes.rb:236>
+#                             GET                   /teams/.json(.:format)                                 #<Proc:0x007f8ea9b17b20@/home/abdelkader/RubymineProjects/coderwall/config/routes.rb:237>
 #                                                   /mail_view                                             MailPreview
 #              protips_update GET|PUT               /protips/update(.:format)                              protips#update
 #               protip_update GET|PUT               /protip/update(.:format)                               protip#update
@@ -37,6 +37,7 @@
 #              feature_protip POST                  /p/:id/feature(.:format)                               protips#feature
 #           delete_tag_protip POST                  /p/:id/delete_tag/:topic(.:format)                     protips#delete_tag {:topic=>/[A-Za-z0-9#\$\+\-_\.(%23)(%24)(%2B)]+/}
 #         like_protip_comment POST                  /p/:protip_id/comments/:id/like(.:format)              comments#like {:id=>/\d+/}
+# mark_as_spam_protip_comment POST                  /p/:protip_id/comments/:id/mark_as_spam(.:format)      comments#mark_as_spam {:id=>/\d+/}
 #             protip_comments GET                   /p/:protip_id/comments(.:format)                       comments#index {:id=>/\d+/}
 #                             POST                  /p/:protip_id/comments(.:format)                       comments#create {:id=>/\d+/}
 #          new_protip_comment GET                   /p/:protip_id/comments/new(.:format)                   comments#new {:id=>/\d+/}
@@ -51,23 +52,10 @@
 #                      protip GET                   /p/:id(.:format)                                       protips#show
 #                             PUT                   /p/:id(.:format)                                       protips#update
 #                             DELETE                /p/:id(.:format)                                       protips#destroy
-#           featured_networks GET                   /n/featured(.:format)                                  networks#featured {:slug=>/[\dA-Z\-]/i}
-#               user_networks GET                   /n/u/:username(.:format)                               networks#user {:slug=>/[\dA-Z\-]/i}
-#              tagged_network GET                   /n/:id/t(/*tags)(.:format)                             networks#tag {:slug=>/[\dA-Z\-]/i}
-#             members_network GET                   /n/:id/members(.:format)                               networks#members {:slug=>/[\dA-Z\-]/i}
-#               mayor_network GET                   /n/:id/mayor(.:format)                                 networks#mayor {:slug=>/[\dA-Z\-]/i}
-#              expert_network GET                   /n/:id/expert(.:format)                                networks#expert {:slug=>/[\dA-Z\-]/i}
 #                join_network POST                  /n/:id/join(.:format)                                  networks#join {:slug=>/[\dA-Z\-]/i}
 #               leave_network POST                  /n/:id/leave(.:format)                                 networks#leave {:slug=>/[\dA-Z\-]/i}
-#         update_tags_network POST                  /n/:id/update-tags(.:format)                           networks#update_tags {:slug=>/[\dA-Z\-]/i}
-#       current_mayor_network GET                   /n/:id/current-mayor(.:format)                         networks#current_mayor {:slug=>/[\dA-Z\-]/i}
 #                    networks GET                   /n(.:format)                                           networks#index {:slug=>/[\dA-Z\-]/i}
-#                             POST                  /n(.:format)                                           networks#create {:slug=>/[\dA-Z\-]/i}
-#                 new_network GET                   /n/new(.:format)                                       networks#new {:slug=>/[\dA-Z\-]/i}
-#                edit_network GET                   /n/:id/edit(.:format)                                  networks#edit {:slug=>/[\dA-Z\-]/i}
 #                     network GET                   /n/:id(.:format)                                       networks#show {:slug=>/[\dA-Z\-]/i}
-#                             PUT                   /n/:id(.:format)                                       networks#update {:slug=>/[\dA-Z\-]/i}
-#                             DELETE                /n/:id(.:format)                                       networks#destroy {:slug=>/[\dA-Z\-]/i}
 #                     protips GET                   /trending(.:format)                                    protips#index
 #                         faq GET                   /faq(.:format)                                         pages#show {:page=>:faq}
 #                         tos GET                   /tos(.:format)                                         pages#show {:page=>:tos}
@@ -80,11 +68,8 @@
 #                authenticate GET|POST              /auth/:provider/callback(.:format)                     sessions#create
 #      authentication_failure GET                   /auth/failure(.:format)                                sessions#failure
 #                    settings GET                   /settings(.:format)                                    users#edit
-#                             GET                   /redeem/:code(.:format)                                redemptions#show
 #                 unsubscribe GET                   /unsubscribe(.:format)                                 emails#unsubscribe
 #                   delivered GET                   /delivered(.:format)                                   emails#delivered
-#              delete_account GET                   /delete_account(.:format)                              users#delete_account
-#    delete_account_confirmed POST                  /delete_account_confirmed(.:format)                    users#delete_account_confirmed
 #             authentications GET                   /authentications(.:format)                             authentications#index
 #                             POST                  /authentications(.:format)                             authentications#create
 #          new_authentication GET                   /authentications/new(.:format)                         authentications#new
@@ -182,6 +167,7 @@
 #        unlink_stackoverflow POST                  /stackoverflow/unlink(.:format)                        users#unlink_provider {:provider=>"stackoverflow"}
 #                             GET                   /stackoverflow/:username(.:format)                     users#show {:provider=>"stackoverflow"}
 #              resume_uploads POST                  /resume_uploads(.:format)                              resume_uploads#create
+#          teams_update_users POST                  /users/teams_update/:membership_id(.:format)           users#teams_update
 #                invite_users POST                  /users/invite(.:format)                                users#invite
 #          autocomplete_users GET                   /users/autocomplete(.:format)                          users#autocomplete
 #                status_users GET                   /users/status(.:format)                                users#status
@@ -193,13 +179,6 @@
 #                  user_skill GET                   /users/:user_id/skills/:id(.:format)                   skills#show
 #                             PUT                   /users/:user_id/skills/:id(.:format)                   skills#update
 #                             DELETE                /users/:user_id/skills/:id(.:format)                   skills#destroy
-#             user_highlights GET                   /users/:user_id/highlights(.:format)                   highlights#index
-#                             POST                  /users/:user_id/highlights(.:format)                   highlights#create
-#          new_user_highlight GET                   /users/:user_id/highlights/new(.:format)               highlights#new
-#         edit_user_highlight GET                   /users/:user_id/highlights/:id/edit(.:format)          highlights#edit
-#              user_highlight GET                   /users/:user_id/highlights/:id(.:format)               highlights#show
-#                             PUT                   /users/:user_id/highlights/:id(.:format)               highlights#update
-#                             DELETE                /users/:user_id/highlights/:id(.:format)               highlights#destroy
 #           user_endorsements GET                   /users/:user_id/endorsements(.:format)                 endorsements#index
 #                             POST                  /users/:user_id/endorsements(.:format)                 endorsements#create
 #        new_user_endorsement GET                   /users/:user_id/endorsements/new(.:format)             endorsements#new
@@ -231,8 +210,6 @@
 #                             PUT                   /users/:id(.:format)                                   users#update
 #                             DELETE                /users/:id(.:format)                                   users#destroy
 #              clear_provider GET                   /clear/:id/:provider(.:format)                         users#clear_provider
-#                     refresh GET                   /refresh/:username(.:format)                           users#refresh
-#       random_accomplishment GET                   /nextaccomplishment(.:format)                          highlights#random
 #                   add_skill GET                   /add-skill(.:format)                                   skills#create
 #                      signin GET                   /signin(.:format)                                      sessions#signin
 #                     signout GET                   /signout(.:format)                                     sessions#destroy
@@ -249,12 +226,6 @@
 #                   following GET                   /:username/following(.:format)                         follows#index {:type=>:following}
 #      callbacks_hawt_feature POST                  /callbacks/hawt/feature(.:format)                      callbacks/hawt#feature
 #    callbacks_hawt_unfeature POST                  /callbacks/hawt/unfeature(.:format)                    callbacks/hawt#unfeature
-#                  admin_root GET                   /admin(.:format)                                       admin#index
-#                 admin_teams GET                   /admin/teams(.:format)                                 admin#teams
-#        admin_sections_teams GET                   /admin/teams/sections/:num_sections(.:format)          admin#sections_teams
-#         admin_section_teams GET                   /admin/teams/section/:section(.:format)                admin#section_teams
-#           admin_sidekiq_web                       /admin/sidekiq                                         Sidekiq::Web
-#             latest_comments GET                   /comments(.:format)                                    comments#index
 #
 
 Coderwall::Application.routes.draw do
@@ -297,9 +268,9 @@ Coderwall::Application.routes.draw do
       get 'd/:date(/:start)' => 'protips#date', as: :date
       get 't/trending' => 'protips#trending', as: :trending_topics
       get 't/by_tags' => 'protips#by_tags', as: :by_tags
-      get 't/(/*tags)' => 'networks#tag', as: :tagged
-      put 't/(/*tags)/subscribe' => 'protips#subscribe', as: :subscribe
-      put 't/(/*tags)/unsubscribe' => 'protips#unsubscribe', as: :unsubscribe
+      get 't/(*tags)' => 'networks#tag', as: :tagged
+      put 't/(*tags)/subscribe' => 'protips#subscribe', as: :subscribe
+      put 't/(*tags)/unsubscribe' => 'protips#unsubscribe', as: :unsubscribe
       get 'fresh'
       get 'trending'
       get 'popular'
@@ -317,25 +288,17 @@ Coderwall::Application.routes.draw do
       post 'delete_tag/:topic' => 'protips#delete_tag', as: :delete_tag, :topic => topic_regex
     end
     resources :comments, constraints: { id: /\d+/ } do
-      member { post 'like' }
+      member do
+        post 'like'
+        post 'mark_as_spam'
+      end
     end
   end
 
-  resources :networks, path: '/n', constraints: { slug: /[\dA-Z\-]/i } do
-    collection do
-      get 'featured' => 'networks#featured', as: :featured
-      get '/u/:username' => 'networks#user', as: :user
-    end
-
+  resources :networks, path: '/n', constraints: { slug: /[\dA-Z\-]/i } , only: [ :index, :show]do
     member do
-      get '/t/(/*tags)' => 'networks#tag', as: :tagged
-      get '/members' => 'networks#members', as: :members
-      get '/mayor' => 'networks#mayor', as: :mayor
-      get '/expert' => 'networks#expert', as: :expert
       post '/join' => 'networks#join', as: :join
       post '/leave' => 'networks#leave', as: :leave
-      post '/update-tags' => 'networks#update_tags', as: :update_tags
-      get '/current-mayor' => 'networks#current_mayor', as: :current_mayor
     end
   end
 
@@ -354,11 +317,8 @@ Coderwall::Application.routes.draw do
   match '/auth/:provider/callback' => 'sessions#create', as: :authenticate, via: [:get, :post]
   get '/auth/failure' => 'sessions#failure', as: :authentication_failure
   get '/settings' => 'users#edit', as: :settings
-  get '/redeem/:code' => 'redemptions#show'
   get '/unsubscribe' => 'emails#unsubscribe'
   get '/delivered' => 'emails#delivered'
-  get '/delete_account' => 'users#delete_account', as: :delete_account
-  post '/delete_account_confirmed' => 'users#delete_account_confirmed', as: :delete_account_confirmed
 
   resources :authentications, :usernames
   resources :invitations
@@ -423,13 +383,15 @@ Coderwall::Application.routes.draw do
 
   resources :users do
     collection do
+      post '/teams/:membership_id' => 'users#teams_update', as: :teams_update
       post 'invite'
       get 'autocomplete'
       get 'status'
     end
-    member { post 'specialties' }
+    member do
+      post 'specialties'
+    end
     resources :skills
-    resources :highlights
     resources :endorsements
     resources :pictures
     resources :follows
@@ -438,8 +400,6 @@ Coderwall::Application.routes.draw do
   end
 
   get '/clear/:id/:provider' => 'users#clear_provider', as: :clear_provider
-  get '/refresh/:username' => 'users#refresh', as: :refresh
-  get '/nextaccomplishment' => 'highlights#random', as: :random_accomplishment
   get '/add-skill' => 'skills#create', as: :add_skill, :via => :post
 
   get '/signin' => 'sessions#signin', as: :signin
@@ -466,16 +426,4 @@ Coderwall::Application.routes.draw do
     post '/hawt/feature' => 'hawt#feature'
     post '/hawt/unfeature' => 'hawt#unfeature'
   end
-
-  require_admin = ->(_, req) { User.where(id: req.session[:current_user], admin: true).exists? }
-  scope :admin, as: :admin, path: '/admin', constraints: require_admin do
-    get '/' => 'admin#index', as: :root
-    get '/teams' => 'admin#teams', as: :teams
-    get '/teams/sections/:num_sections' => 'admin#sections_teams', as: :sections_teams
-    get '/teams/section/:section' => 'admin#section_teams', as: :section_teams
-    mount Sidekiq::Web => '/sidekiq'
-  end
-  # TODO: namespace inside admin
-  get '/comments' => 'comments#index', as: :latest_comments
-
 end

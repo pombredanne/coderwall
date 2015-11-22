@@ -1,8 +1,8 @@
-require Rails.root.join('app/services/provider_user_lookup_service')
-
 class ProviderUserLookupsController < ApplicationController
+
+  # GET                   /providers/:provider/:username(.:format)
   def show
-    service = Services::ProviderUserLookupService.new params[:provider], params[:username]
+    service = ProviderUserLookupService.new params[:provider], params[:username]
     if user = service.lookup_user
       redirect_to badge_path(user.username)
     else

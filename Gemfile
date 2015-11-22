@@ -1,7 +1,8 @@
-ruby '2.1.5'
+ruby '2.2.2'
 
 source 'https://rubygems.org' do
   gem 'rails', '~> 3.2'
+  gem 'rails_latest'
 
   gem 'sass'
   gem 'coffee-rails'
@@ -10,13 +11,10 @@ source 'https://rubygems.org' do
 # Assets
   gem 'autoprefixer-rails'
   gem 'jquery-rails', '= 2.0.3'
-
-# Two Client-side JS frameworks. Yep, first one to refactor out the other wins.
-  gem 'backbone-on-rails'
+  gem 'selectize-rails'
 
 # Load environment variables first
   gem 'dotenv-rails', groups: [:development, :test]
-
 
 # Attachements
   gem 'carrierwave'
@@ -58,14 +56,14 @@ source 'https://rubygems.org' do
   gem 'chronic'
 
 # Redis
-  gem 'redis-rails', '~> 3.2'
+  gem 'redis-rails', '3.2.4'
 
 
   gem 'sidekiq'
   gem 'sinatra'
 
 # Payment processing
-  gem 'stripe', github: 'stripe/stripe-ruby'
+  gem 'stripe'
 
 # RSS parsing
   gem 'feedjira'
@@ -90,42 +88,43 @@ source 'https://rubygems.org' do
   gem 'faraday', '~> 0.8.1'
   gem 'metamagic'
 
-  gem "mail_view", "~> 2.0.4"
 
 # ----------------
 
-
-  gem 'acts_as_commentable', '2.0.1'
   gem 'acts_as_follower', '0.1.1'
-  gem 'color'
-  gem 'createsend'
   gem 'fog'
   gem 'friendly_id', '4.0.10.1'
   gem 'geocoder'
-  gem 'hashie'
   gem 'linkedin'
   gem 'mini_magick'
   gem 'mixpanel'
   gem 'never_wastes'
   gem 'octokit'
-  gem 'pubnub', '0.1.9'
-  gem 'querystring'
-  gem 'rails_autolink'
   gem 'rakismet'
-  gem 'ruby-progressbar'
   gem 'sanitize'
   gem 'simple_form'
   gem 'sitemap_generator'
   gem 'tweet-button'
   gem 'local_time'
+  gem 'materialize-sass'
+
+  gem 'closure_tree'
 
   gem 'elasticsearch-model'
   gem 'elasticsearch-rails'
+
+  gem 'newrelic_rpm'
 
 # DROP BEFORE RAILS 4
   gem 'compass-rails'
   gem 'strong_parameters'
   gem 'postgres_ext'
+  gem 'test-unit'
+  gem 'foreigner'
+  gem 'state_machine'
+  gem 'activerecord-postgres-json'
+  gem "mail_view", "~> 2.0.4"
+
 # ElasticSearch client
   gem 'tire'
 # /DROP BEFORE RAILS 4
@@ -140,14 +139,14 @@ source 'https://rubygems.org' do
     gem 'rubocop'
     gem 'spring'
     gem 'spring-commands-rspec'
-    gem 'travis'
+    gem 'pry-rails' #better console
   end
 
   group :development, :test do
     gem 'annotate'
+    gem 'fabrication', '2.11.3'
     gem 'fabrication-rails'
     gem 'ffaker'
-    gem 'jazz_hands', github: 'nixme/jazz_hands', branch: 'bring-your-own-debugger'
     gem 'launchy'
     gem 'pry-byebug'
     #gem 'pry-rescue'
@@ -158,10 +157,8 @@ source 'https://rubygems.org' do
   end
 
   group :test do
-    # gem 'rspec-its'
     gem 'capybara'
     gem 'capybara-screenshot'
-    gem 'turnip' # write rspec feature specs in cucumber style
     gem 'rack_session_access' # allows to set session from within Capybara
     gem 'poltergeist' # headless js driver for Capybara that uses phantomJs
     gem 'selenium-webdriver' # headfull js driver for Capybara
@@ -169,15 +166,13 @@ source 'https://rubygems.org' do
     gem 'database_cleaner'
     gem 'fuubar'
     gem 'shoulda-matchers'
-    gem 'simplecov'
     gem 'timecop'
     gem 'vcr'
     gem 'webmock', '<1.16'
-    gem 'stripe-ruby-mock', git: 'https://github.com/rebelidealist/stripe-ruby-mock', branch: 'live-tests'
+    gem 'stripe-ruby-mock'
   end
 
   group :production do
-    gem 'newrelic_rpm'
     gem 'puma'
     gem 'rails_12factor'
     gem 'heroku-deflater'
@@ -186,7 +181,6 @@ source 'https://rubygems.org' do
 end
 
 source 'https://rails-assets.org' do
-
   gem 'rails-assets-font-awesome'
   gem 'rails-assets-jquery-cookie', '1.4.0'
   gem 'rails-assets-jquery-dropdown'

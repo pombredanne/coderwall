@@ -16,7 +16,7 @@ RSpec.describe UserActivateWorker do
     context 'when invalid user' do
       let(:user_id) { 1 }
 
-      it { expect { worker.perform(user_id) }.to raise_error ActiveRecord::RecordNotFound }
+      it { expect { worker.perform(user_id) }.not_to raise_error }
     end
 
     context 'when pending user' do
@@ -32,7 +32,7 @@ RSpec.describe UserActivateWorker do
 
       it 'should send welcome mail' do
         mail = double('mail')
-        expect(NotifierMailer).to receive(:welcome_email).with(user.username).and_return(mail)
+        expect(NotifierMailer).to receive(:welcome_email).with(user.id).and_return(mail)
         expect(mail).to receive(:deliver)
         worker.perform(user.id)
       end

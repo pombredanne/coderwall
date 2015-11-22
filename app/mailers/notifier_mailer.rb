@@ -22,10 +22,10 @@ class NotifierMailer < ApplicationMailer
   INVOICE_EVENT = 'invoice'
   ACTIVITY_SUBJECT_PREFIX = '[Coderwall]'
 
-  def welcome_email(username)
+  def welcome_email(user_id)
     headers['X-Mailgun-Variables'] = {email_type: WELCOME_EVENT}.to_json
 
-    @user = User.find_by_username(username)
+    @user = User.find(user_id)
     @user.touch(:last_email_sent)
 
     if @user.created_at < 2.days.ago
@@ -85,12 +85,12 @@ class NotifierMailer < ApplicationMailer
     mail to: @user.email, subject: "#{congratulation}! You have a new fan on Coderwall"
   end
 
-  def new_comment(username, commentor_username, comment_id)
+  def new_comment(user_id, commentor_id, comment_id)
     headers['X-Mailgun-Variables'] = {email_type: NEW_COMMENT_EVENT}.to_json
     track_campaign("new_comment")
 
-    @commentor = User.find_by_username(commentor_username)
-    @user = User.find_by_username(username)
+    @commentor = User.find(commentor_id)
+    @user = User.find(user_id)
     @comment = Comment.find(comment_id)
     @user.touch(:last_email_sent)
 
@@ -194,26 +194,26 @@ class NotifierMailer < ApplicationMailer
   end
 
 
-  def new_applicant(username, job_id)
+  def new_applicant(user_id, job_id)
     headers['X-Mailgun-Variables'] = {email_type: NEW_APPLICANT_EVENT}.to_json
     #track_campaign("new_applicant")
 
-    @user = User.find_by_username(username)
-    @job = Opportunity.find(job_id)
-    @admin = User.find(@job.team.account.admin_id)
+    @user = User.find(user_id)
+    @job = Opportunity.select([:id, :team_id, :name]).find(job_id)
+    emails = @job.team.admin_accounts.pluck(:email)
 
-    mail to: @admin.email, bcc: admin_emails, subject: "New applicant for #{@job.title} from Coderwall"
+    mail to: emails, bcc: admin_emails, subject: "New applicant for #{@job.title} from Coderwall"
   end
 
   def invoice(team_id, time, invoice_id=nil)
     headers['X-Mailgun-Variables'] = {email_type: INVOICE_EVENT}.to_json
     #track_campaign("new_applicant")
     @team = Team.find(team_id)
-    @admin = @team.account.admin
+    team_admin_emails = @team.admin_accounts.pluck :email
     @invoice = invoice_id.nil? ? @team.account.invoice_for(Time.at(time)) : Stripe::Invoice.retrieve(invoice_id).to_hash.with_indifferent_access
     @customer = @team.account.customer
 
-    mail to: @admin.email, bcc: admin_emails, subject: "Invoice for Coderwall enhanced team profile subscription"
+    mail to: team_admin_emails, bcc: admin_emails, subject: "Invoice for Coderwall enhanced team profile subscription"
   end
 
 
@@ -268,6 +268,6 @@ class NotifierMailer < ApplicationMailer
   end
 
   def admin_emails
-    YAML.load(ENV['NOTIFIER_ADMIN_EMAILS'])
+    User.admins.pluck(:email)
   end
 end

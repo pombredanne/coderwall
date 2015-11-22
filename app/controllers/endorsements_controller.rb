@@ -1,5 +1,6 @@
 class EndorsementsController < ApplicationController
 
+  # GET                   /users/:user_id/endorsements(.:format)
   def index
     flash[:notice] = 'You must be signed in to make an endorsement.'
     #This is called when someone tries to endorse while unauthenticated
@@ -8,6 +9,7 @@ class EndorsementsController < ApplicationController
     redirect_to(signin_path)
   end
 
+  # POST                  /users/:user_id/endorsements(.:format)
   def create
     return head(:forbidden) unless signed_in? && params[:user_id] != current_user.id.to_s
     @user  = User.find(params[:user_id])
@@ -18,9 +20,11 @@ class EndorsementsController < ApplicationController
     render json: {
                    unlocked: !@skill.locked?,
                    message:  "Awesome! #{@skill.endorse_message}"
-                 }.to_json
+                 }
   end
 
+  # GET                   /users/:user_id/endorsements/:id(.:format)
+  # GET                   /:username/endorsements.json(.:format)
   def show #Used by api.coderwall.com
     @user = User.find_by_username(params[:username])
     return head(:not_found) if @user.nil?

@@ -51,7 +51,6 @@
 #  linkedin_secret               :string(255)
 #  last_email_sent               :datetime
 #  linkedin_public_url           :string(255)
-#  redemptions                   :text
 #  endorsements_count            :integer          default(0)
 #  team_document_id              :string(255)
 #  speakerdeck                   :string(255)
@@ -68,7 +67,6 @@
 #  tracking_code                 :string(255)
 #  utm_campaign                  :string(255)
 #  score_cache                   :float            default(0.0)
-#  gender                        :string(255)
 #  notify_on_follow              :boolean          default(TRUE)
 #  api_key                       :string(255)
 #  remind_to_create_team         :datetime
@@ -104,15 +102,14 @@
 #  last_ip                       :string(255)
 #  last_ua                       :string(255)
 #  team_id                       :integer
+#  role                          :string(255)      default("user")
 #
+
+require 'rails_helper'
 
 RSpec.describe User, type: :model do
   it { is_expected.to have_one :github_profile }
   it { is_expected.to have_many :github_repositories }
-
-  before :each do
-    User.destroy_all
-  end
 
   describe 'validation' do
     it 'should not allow a username in the reserved list' do
@@ -165,11 +162,16 @@ RSpec.describe User, type: :model do
     end
 
     it 'should find users ignoring case' do
-      user = Fabricate(:user, username: 'MDEITERS', twitter: 'MDEITERS', github: 'MDEITERS', linkedin: 'MDEITERS')
-      expect(User.find_by_provider_username('mdeiters', '')).to eq(user)
-      expect(User.find_by_provider_username('mdeiters', "twitter")).to eq(user)
-      expect(User.find_by_provider_username('mdeiters', "github")).to eq(user)
-      expect(User.find_by_provider_username('mdeiters', "linkedin")).to eq(user)
+      user = Fabricate(:user) do
+        username FFaker::Internet.user_name.upcase.gsub('.','')
+        twitter FFaker::Internet.user_name.upcase
+        github FFaker::Internet.user_name.upcase
+        linkedin FFaker::Internet.user_name.upcase
+      end
+      expect(User.find_by_provider_username(user.username.downcase, '')).to eq(user)
+      expect(User.find_by_provider_username(user.twitter.downcase, 'twitter')).to eq(user)
+      expect(User.find_by_provider_username(user.github.downcase, 'github')).to eq(user)
+      expect(User.find_by_provider_username(user.linkedin.downcase, 'linkedin')).to eq(user)
     end
   end
 
@@ -178,119 +180,6 @@ RSpec.describe User, type: :model do
 
     user = User.for_omniauth(omniauth.with_indifferent_access)
     expect(user).to be_new_record
-  end
-
-  describe 'viewing' do
-    it 'tracks when a user views a profile' do
-      user = Fabricate :user
-      viewer = Fabricate :user
-      user.viewed_by(viewer)
-      expect(user.viewers.first).to eq(viewer)
-      expect(user.total_views).to eq(1)
-    end
-
-    it 'tracks when a user views a profile' do
-      user = Fabricate :user
-      user.viewed_by(nil)
-      expect(user.total_views).to eq(1)
-    end
-  end
-  describe 'badges' do
-    it 'should return users with most badges' do
-      user_with_2_badges = Fabricate :user, username: 'somethingelse'
-      user_with_2_badges.badges.create!(badge_class_name: Mongoose3.name)
-      user_with_2_badges.badges.create!(badge_class_name: Octopussy.name)
-
-      user_with_3_badges = Fabricate :user
-      user_with_3_badges.badges.create!(badge_class_name: Mongoose3.name)
-      user_with_3_badges.badges.create!(badge_class_name: Octopussy.name)
-      user_with_3_badges.badges.create!(badge_class_name: Mongoose.name)
-
-      expect(User.top(1)).to include(user_with_3_badges)
-      expect(User.top(1)).not_to include(user_with_2_badges)
-    end
-
-    it 'returns badges in order created with latest first' do
-      user = Fabricate :user
-      badge1 = user.badges.create!(badge_class_name: Mongoose3.name)
-      user.badges.create!(badge_class_name: Octopussy.name)
-      badge3 = user.badges.create!(badge_class_name: Mongoose.name)
-
-      expect(user.badges.first).to eq(badge3)
-      expect(user.badges.last).to eq(badge1)
-    end
-
-    class NotaBadge < BadgeBase
-    end
-
-    class AlsoNotaBadge < BadgeBase
-    end
-
-    it 'should award user with badge' do
-      user = Fabricate :user
-      user.award(NotaBadge.new(user))
-      expect(user.badges.size).to eq(1)
-      expect(user.badges.first.badge_class_name).to eq(NotaBadge.name)
-    end
-
-    it 'should not allow adding the same badge twice' do
-      user = Fabricate :user
-      user.award(NotaBadge.new(user))
-      user.award(NotaBadge.new(user))
-      user.save!
-      expect(user.badges.count).to eq(1)
-    end
-
-    it 'increments the badge count when you add new badges' do
-      user = Fabricate :user
-
-      user.award(NotaBadge.new(user))
-      user.save!
-      user.reload
-      expect(user.badges_count).to eq(1)
-
-      user.award(AlsoNotaBadge.new(user))
-      user.save!
-      user.reload
-      expect(user.badges_count).to eq(2)
-    end
-
-    it 'should randomly select the user with badges' do
-      user = Fabricate :user
-      user.award(NotaBadge.new(user))
-      user.award(NotaBadge.new(user))
-      user.save!
-
-      user2 = Fabricate :user, username: 'different', github_token: 'unique'
-
-      4.times do
-        expect(User.random).not_to eq(user2)
-      end
-    end
-  end
-
-  describe 'redemptions' do
-    it 'should have an empty list of redemptions when new' do
-      expect(Fabricate.build(:user).redemptions).to be_empty
-    end
-
-    it 'should have a single redemption with a redemptions list of one item' do
-      user = Fabricate.build(:user, redemptions: %w(railscampx nodeknockout))
-      user.save
-      expect(user.reload.redemptions).to eq(%w(railscampx nodeknockout))
-    end
-
-    it 'should allow you to add a redemption' do
-      user = Fabricate.build(:user, redemptions: %w(foo))
-      user.update_attributes redemptions: %w(bar)
-      expect(user.reload.redemptions).to eq(%w(bar))
-    end
-
-    it 'should allow you to remove redemptions' do
-      user = Fabricate.build(:user, redemptions: %w(foo))
-      user.update_attributes redemptions: []
-      expect(user.reload.redemptions).to be_empty
-    end
   end
 
   describe 'score' do
@@ -322,114 +211,6 @@ RSpec.describe User, type: :model do
     end
   end
 
-  describe '#team' do
-    let(:team) { Fabricate(:team) }
-    let(:user) { Fabricate(:user) }
-
-    it 'returns membership team if user has membership' do
-      team.add_member(user)
-      expect(user.team).to eq(team)
-    end
-
-    it 'returns team if team_id is set' do
-      user.team_id = team.id
-      user.save
-      expect(user.team).to eq(team)
-    end
-
-    it 'returns nil if no team_id or membership' do
-      expect(user.team).to eq(nil)
-    end
-
-    it 'should not error if the users team has been deleted' do
-      team = Fabricate(:team)
-      user = Fabricate(:user)
-      team.add_member(user)
-      team.destroy
-      expect(user.team).to be_nil
-    end
-  end
-
-  describe '#on_team?' do
-    let(:team) { Fabricate(:team) }
-    let(:user) { Fabricate(:user) }
-
-    it 'is true if user has a membership' do
-      expect(user.on_team?).to eq(false)
-      team.add_member(user)
-      expect(user.reload.on_team?).to eq(true)
-    end
-
-    it 'is true if user is on a team' do
-      expect(user.on_team?).to eq(false)
-      user.team = team
-      user.save
-      expect(user.reload.on_team?).to eq(true)
-    end
-  end
-
-  describe "#on_premium_team?" do
-    it 'should indicate when user is on a premium team' do
-      team = Fabricate(:team, premium: true)
-      member = team.add_member(user = Fabricate(:user))
-      expect(user.on_premium_team?).to eq(true)
-    end
-
-    it 'should indicate a user not on a premium team when they dont belong to a team at all' do
-      user = Fabricate(:user)
-      expect(user.on_premium_team?).to eq(false)
-    end
-  end
-
-  describe 'following users' do
-    let(:user) { Fabricate(:user) }
-    let(:other_user) { Fabricate(:user) }
-
-    it 'can follow another user' do
-      user.follow(other_user)
-
-      expect(other_user.followed_by?(user)).to eq(true)
-      expect(user.following?(other_user)).to eq(true)
-    end
-
-    it 'should pull twitter follow list and follow any users on our system' do
-      expect(Twitter).to receive(:friend_ids).with(6_271_932).and_return(%w(1111 2222))
-
-      user = Fabricate(:user, twitter_id: 6_271_932)
-      other_user = Fabricate(:user, twitter_id: '1111')
-      expect(user).not_to be_following(other_user)
-      user.build_follow_list!
-
-      expect(user).to be_following(other_user)
-    end
-
-    it 'should follow another user only once' do
-      expect(user.following_by_type(User.name).size).to eq(0)
-      2.times do
-        user.follow(other_user)
-        expect(user.following_by_type(User.name).size).to eq(1)
-      end
-    end
-  end
-
-  describe 'following teams' do
-    let(:user) { Fabricate(:user) }
-    let(:team) { Fabricate(:team) }
-
-    it 'can follow a team' do
-      user.follow_team!(team)
-      user.reload
-      expect(user.following_team?(team)).to eq(true)
-    end
-
-    it 'can unfollow a team' do
-      user.follow_team!(team)
-      user.unfollow_team!(team)
-      user.reload
-      expect(user.following_team?(team)).to eq(false)
-    end
-  end
-
   describe 'skills' do
     let(:user) { Fabricate(:user) }
 
@@ -443,29 +224,6 @@ RSpec.describe User, type: :model do
     it 'finds skill by name' do
       skill_created = user.add_skill('Ruby')
       expect(user.skill_for('ruby')).to eq(skill_created)
-    end
-  end
-
-  describe 'api key' do
-    let(:user) { Fabricate(:user) }
-
-    it 'should assign and save an api_key if not exists' do
-      api_key = user.api_key
-      expect(api_key).not_to be_nil
-      expect(api_key).to eq(user.api_key)
-      user.reload
-      expect(user.api_key).to eq(api_key)
-    end
-
-    it 'should assign a new api_key if the one generated already exists' do
-      RandomSecure = double('RandomSecure')
-      allow(RandomSecure).to receive(:hex).and_return('0b5c141c21c15b34')
-      user2 = Fabricate(:user)
-      api_key2 = user2.api_key
-      user2.api_key = RandomSecure.hex(8)
-      expect(user2.api_key).not_to eq(api_key2)
-      api_key1 = user.api_key
-      expect(api_key1).not_to eq(api_key2)
     end
   end
 
@@ -494,14 +252,5 @@ RSpec.describe User, type: :model do
    end
  end
 
-  describe 'deleting a user' do
-    it 'deletes asosciated protips' do
-      user = Fabricate(:user)
-      Fabricate(:protip, user: user)
-
-      expect(user.reload.protips).to receive(:destroy_all).and_return(false)
-      user.destroy
-    end
-  end
 
 end

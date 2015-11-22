@@ -8,7 +8,6 @@
 #  designation      :string(255)
 #  location         :string(255)
 #  cached_tags      :string(255)
-#  team_document_id :string(255)
 #  link             :string(255)
 #  salary           :integer
 #  options          :float
@@ -37,7 +36,8 @@ class Opportunity < ActiveRecord::Base
 
   OPPORTUNITY_TYPES = %w(full-time part-time contract internship)
 
-  has_many :seized_opportunities
+  has_many :seized_opportunities, dependent: :delete_all
+  has_many :applicants, through: :seized_opportunities, source: :user
 
   # Order here dictates the order of validation error messages displayed in views.
   validates :name, presence: true, allow_blank: false
@@ -56,12 +56,12 @@ class Opportunity < ActiveRecord::Base
   after_create :pay_for_it!
 
   #this scope should be renamed.
-  scope :valid, where(deleted: false).where('expires_at > ?', Time.now).order('created_at DESC')
+  scope :valid, -> { where(deleted: false).where('expires_at > ?', Time.now).order('created_at DESC') }
   scope :by_city, ->(city) { where('LOWER(location_city) LIKE ?', "%#{city.try(:downcase)}%") }
   scope :by_tag, ->(tag) { where('LOWER(cached_tags) LIKE ?', "%#{tag}%") unless tag.nil? }
   scope :by_query, ->(query) { where("name ~* ? OR description ~* ? OR cached_tags ~* ?", query, query, query) }
   #remove default scope
-  default_scope valid
+  default_scope { valid }
 
   HUMANIZED_ATTRIBUTES = { name: 'Title' }
 
@@ -75,10 +75,6 @@ class Opportunity < ActiveRecord::Base
     query_string = "tags:#{tags.join(' OR ')}"
     failover_scope = Opportunity.joins('inner join taggings on taggings.taggable_id = opportunities.id').joins('inner join tags on taggings.tag_id = tags.id').where("taggings.taggable_type = 'Opportunity' AND taggings.context = 'tags'").where('lower(tags.name) in (?)', tags.map(&:downcase)).group('opportunities.id').order('count(opportunities.id) desc')
     Opportunity::Search.new(Opportunity, Opportunity::Search::Query.new(query_string), nil, nil, nil, failover: failover_scope).execute
-  end
-
-  def self.with_public_id(public_id)
-    where(public_id: public_id).first
   end
 
   def self.random
@@ -98,15 +94,11 @@ class Opportunity < ActiveRecord::Base
   end
 
   def seize_by(user)
-    seized_opportunities.create!(user_id: user.id, team_id: team_id)
+    seized_opportunities.create(user_id: user.id)
   end
 
   def seized_by?(user)
-    seized_opportunities.where(user_id: user.id).any?
-  end
-
-  def seizers
-    User.where(id: seized_opportunities.select(:user_id))
+    seized_opportunities.exists?(user_id: user.id)
   end
 
   def active?
@@ -125,7 +117,7 @@ class Opportunity < ActiveRecord::Base
 
   def destroy(force = false)
     if force
-      super
+      super()
     else
       self.deleted = true
       self.deleted_at = Time.now.utc
@@ -157,10 +149,6 @@ class Opportunity < ActiveRecord::Base
 
   def has_application_from?(user)
     seized_by?(user)
-  end
-
-  def applicants
-    seizers
   end
 
   def viewed_by(viewer)

@@ -1,9 +1,6 @@
 - content_for :content_wrapper do
   false
 
-- content_for :javascript do
-  = javascript_include_tag 'protips-grid'
-
 - content_for :head do
   = stylesheet_link_tag 'protip'
 
@@ -52,18 +49,11 @@
           %li
             = link_to "Liked", liked_protips_path(scope: params[:scope]), class: selected_search_context_class("liked"), id: "x-scope-liked"
 
-      %ul.toggle-nav
-        - if signed_in?
-          %li
-            %a.switch#x-scope-toggle{href: '/', class: display_scope_class}
-          %li
-            %a.action.followings#x-followings-toggle{href: '/'}
-
+      - if signed_in?
+        %ul.toggle-nav
           %li
             %a.action.share-tip{href: new_protip_path, class: "track", 'data-action' => 'create protip', 'data-from' => 'homepage', 'data-properties' => {'context' => @context}.to_json}
 
-        %li
-          %a.action.search#x-show-search{href: '/'}
 
   //search bar
   .filter-bar.search-bar#x-search{class: display_search_class}
@@ -76,7 +66,6 @@
           %a.action.search#x-hide-search{href: '/'}
 
 
-
   -if signed_in?
     //followings
     -cache(followings_fragment_cache_key(current_user.id), expires_in: 15.minutes) do
@@ -85,25 +74,6 @@
           %h1 Following
 
           .inside-panel
-            %h2 Networks
-            %ul.protips-grid.new-networks-list.cf
-              - following_networks = current_user.following_networks
-              #x-following-networks.hide{'data-networks' => following_networks.map(&:slug)}
-
-              - following_networks.limit(11).map(&:slug).each do |slug|
-                %li{style: "border-color:##{color_signature(slug)}"}
-                  = link_to '', leave_network_path(id: slug), class: "unfollow followed #{slug}", remote: true, method: :post, rel: 'nofollow'
-                  %a.new-network{href: network_path(id: slug)}
-                    = slug.humanize
-              - if following_networks.count > 11
-                %li.plus-more
-                  %a{href: user_networks_path(username:current_user.username)}
-
-                    %span.x-follow-count
-                      = following_networks.count - 11
-                    more
-
-
             %h2 Connections
             %ul.protips-grid.connections-list.cf
               - following_users = current_user.following_users
@@ -166,7 +136,6 @@
                     more
 
 
-
   .inside.cf
     -unless @suggested_networks.blank?
       .suggested
@@ -174,7 +143,7 @@
           %h2 Suggested networks to follow
           %ul.protips-grid.new-networks-list.cf
             - @suggested_networks.each do |name|
-              - slug = Network.slugify(name)
+              - slug = name.parameterize
               %li{style: "border-color:##{color_signature(slug)}"}
                 = link_to '', join_network_path(id: slug), class: "follow #{slug} #{signed_in? && current_user.following_networks.exists?(slug: slug) ? "followed" : ""}", remote: true, method: :post, rel: "nofollow"
                 %a.new-network{href: network_path(id: slug)}

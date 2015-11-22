@@ -1,25 +1,29 @@
 class SessionsController < ApplicationController
   skip_before_action :require_registration
 
+  # GET                   /sessions/new(.:format)
   def new
     #FIXME
     redirect_to destination_url if signed_in?
   end
 
+  # GET                   /signin(.:format)
   def signin
     #FIXME
     return redirect_to destination_url if signed_in?
     store_location!(params[:return_to]) unless params[:return_to].nil?
   end
 
+  # GET                   /sessions/force(.:format)
   def force
     #REMOVEME
     head(:forbidden) unless current_user.admin?
     sign_out
-    sign_in(@user = User.find_by_username(params[:username]))
-    redirect_to(badge_url(username: params[:username]))
+    sign_in(User.find(params[:id]))
+    redirect_to(root_url)
   end
 
+  # GET|POST              /auth/:provider/callback(.:format)
   def create
     #FIXME
     raise "OmniAuth returned error #{params[:error]}" unless params[:error].blank?
@@ -27,7 +31,7 @@ class SessionsController < ApplicationController
       current_user.apply_oauth(oauth)
       current_user.save!
       flash[:notice] = "#{oauth[:provider].humanize} account linked"
-      redirect_to(destination_url)
+      redirect_to(edit_user_url(current_user))
     else
       @user = User.find_with_oauth(oauth)
       if @user && !@user.new_record?
@@ -55,11 +59,13 @@ class SessionsController < ApplicationController
     redirect_to(root_url)
   end
 
+  # DELETE                /sessions/:id(.:format)
   def destroy
     sign_out
     redirect_to(root_url)
   end
 
+  # GET                   /auth/failure(.:format)
   def failure
     flash[:error] = "Authenication error: #{params[:message].humanize}" unless params[:message].nil?
     render action: :new

@@ -37,7 +37,7 @@
           %h3 Networks
           %ul.side-bar-list.side-bar-networks
             - protip_networks(protip).each do |name|
-              - slug = Network.slugify(name)
+              - slug = name.parameterize
               %li{ style: "border-color:##{ color_signature(slug) }" }
                 %a.name{ href: network_path(id: slug) }= name
                 - followed = current_user.try(:member_of?, Network.find_by_slug(slug))
@@ -86,8 +86,7 @@
         %ul#tags.cf{itemprop: :keywords}
           - protip.topic_list.each do |tag|
             %li
-              %a{ href: "/p/t/#{ tag.parameterize }" }
-                = tag
+              = link_to tag, protips_path(search: tag.parameterize)
               - if is_admin?
                 = link_to 'delete', delete_tag_protip_path(protip.public_id, CGI.escape(tag)), method: :post, class: "delete"
 
@@ -105,16 +104,7 @@
       %div.tip-content{itemprop: :articleBody}
         = raw sanitize(protip.to_html)
 
-    - if include_comments
-      %section.comments{ class:('no-comments' if protip.comments.empty? ) }
-        - if protip.comments.any?
-          %h2.comments-header
-            %i.fa.fa-comments
-            Comments
-          -# HACK: Ignore protip comments where the owner is non-existant
-          -# TODO: Clean out old comments where the is no User associated
-          %ul.comment-list= render protip.comments.select { |comment| comment.user }
-        = render 'comments/add_comment'
+    = render('protip_comments', comments: protip.comments.showable) if include_comments
 
     - if defined?(:job) && !job.nil?
       .mobile-job

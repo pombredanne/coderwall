@@ -10,57 +10,32 @@
 #  updated_at          :datetime
 #  protips_count_cache :integer          default(0)
 #  featured            :boolean          default(FALSE)
+#  parent_id           :integer
+#  network_tags        :citext           is an Array
 #
 
 class Network < ActiveRecord::Base
-  include Tire::Model::Search
-
-  settings analysis: { analyzer: { exact_term_search: { "type"      => "keyword",
-                                                        "tokenizer" => "keyword" } } }
-  mapping show: { properties: {
-    name:          { type: 'string', boost: 100, index: 'not_analyzed' },
-    protips_count: { type: 'integer', index: 'not_analyzed' },
-    upvotes:       { type: 'integer', index: 'not_analyzed' },
-    upvotes_score: { type: 'float', index: 'not_analyzed' },
-    tags:          { type: 'string', boost: 80, index: 'not_analyzed' },
-    members:       { properties: {
-      username:     { type: 'string', index: 'not_analyzed' },
-      user_id:      { type: 'integer', boost: 40, index: 'not_analyzed' },
-      profile_path: { type: 'string', index: 'not_analyzed' },
-      profile_url:  { type: 'string', index: 'not_analyzed' },
-    } } } }
+  has_closure_tree order: :slug
 
   acts_as_taggable
   acts_as_followable
-  attr_accessor :resident_expert
-  has_many :network_experts, autosave: true, dependent: :destroy
+
+  has_many :network_protips
+  has_many :protips, through: :network_protips
 
   validates :slug, uniqueness: true
 
   before_validation :create_slug!
   after_validation :tag_with_name!
 
-  before_save :assign_mayor!
   before_save :correct_tags
   before_save :cache_counts!
   after_create :assign_members
 
-  scope :most_protips, order('protips_count_cache DESC')
-  scope :featured, where(featured: true)
+  scope :most_protips, ->{ order('protips_count_cache DESC') }
+  scope :featured, ->{ where(featured: true)}
 
   class << self
-    def slugify(name)
-      if !!(name =~ /\p{Latin}/)
-        name.to_s.downcase.gsub(/[^a-z0-9]+/i, '-').chomp('-')
-      else
-        name.to_s.tr(' ', '-')
-      end
-    end
-
-    def unslugify(slug)
-      slug.tr('-', ' ')
-    end
-
     def all_with_tag(tag_name)
       Network.tagged_with(tag_name)
     end
@@ -70,11 +45,11 @@ class Network < ActiveRecord::Base
     end
 
     def top_tags_not_networks
-      top_tags.where('tags.name NOT IN (?)', Network.all.map(&:name))
+      top_tags.where('tags.name NOT IN (?)', Network.pluck(:slug))
     end
 
     def top_tags_not_in_any_networks
-      top_tags.where('tags.name NOT IN (?)', Network.all.map(&:tag_list).flatten)
+      top_tags.where('tags.name NOT IN (?)', Network.pluck(:tag_list).flatten)
     end
 
     def top_tags
@@ -91,7 +66,11 @@ class Network < ActiveRecord::Base
   end
 
   def create_slug!
-    self.slug = self.class.slugify(self.name)
+    self.slug = self.name
+  end
+
+  def slug=value
+    self[:slug] = value.to_s.parameterize
   end
 
   def tag_with_name!
@@ -102,77 +81,17 @@ class Network < ActiveRecord::Base
 
   def correct_tags
     if self.tag_list_changed?
-      self.tag_list = self.tag_list.uniq.select { |tag| Tag.exists?(name: tag) }.reject { |tag| (tag != self.name) && Network.exists?(name: tag) }
+      self.tag_list = self.tag_list.uniq.select { |tag| ActsAsTaggableOn::Tag.exists?(name: tag) }.reject { |tag| (tag != self.name) && Network.exists?(name: tag) }
     end
+
   end
 
   def protips_tags_with_count
     self.protips.joins("inner join taggings on taggings.taggable_id = protips.id").joins('inner join tags on taggings.tag_id = tags.id').where("taggings.taggable_type = 'Protip' AND taggings.context = 'topics'").select('tags.name, count(tags.name)').group('tags.name').order('count(tags.name) DESC')
   end
 
-  def ordered_tags
-    self.protips_tags_with_count.having('count(tags.name) > 5').map(&:name) & self.tags
-  end
-
   def potential_tags
     self.protips_tags_with_count.map(&:name).uniq
-  end
-
-  def mayor
-    @mayor ||= self.network_experts.where(designation: 'mayor').last.try(:user)
-  end
-
-  def assign_mayor!
-
-    candidate = self.in_line_to_the_throne.first
-    unless candidate.nil?
-      Rails.logger.debug "finding a mayor among: #{self.tag_list}" if ENV['DEBUG']
-      person_with_most_upvoted_protips_on_topic = User.find(candidate.user_id)
-      Rails.logger.debug "mayor for #{name} found: #{person_with_most_upvoted_protips_on_topic.username}" if ENV['DEBUG']
-
-      #if self.mayor && person_with_most_upvoted_protips_on_topic && person_with_most_upvoted_protips_on_topic.id != self.mayor.id
-      #  enqueue(GenerateEvent, :new_mayor, Hash[*[Audience.network(self.id), Audience.admin].map(&:to_a).flatten(2)], self.to_event_hash(:mayor => person_with_most_upvoted_protips_on_topic), 30.minutes)
-      #end
-
-      self.network_experts.build(user: person_with_most_upvoted_protips_on_topic, designation: :mayor)
-    end
-  end
-
-  def to_event_hash(options={})
-    { user:    { username: options[:mayor] && options[:mayor].try(:username) },
-      network: { name: self.name, url: Rails.application.routes.url_helpers.network_path(self.slug) } }
-  end
-
-  def resident_expert
-    @resident ||= self.network_experts.where(designation: 'resident_expert').last.try(:user)
-  end
-
-  def resident_expert=(user)
-    self.network_experts.build(designation: 'resident_expert', user_id: user.id)
-  end
-
-  def to_indexed_json
-    to_public_hash.to_json
-  end
-
-  def to_public_hash
-    {
-      name:          name,
-      protips_count: kind,
-      title:         title,
-      body:          body,
-      tags:          topics,
-      upvotes:       upvotes,
-      url:           path,
-      upvote_path:   upvote_path,
-      link:          link,
-      created_at:    created_at,
-      user:          user_hash
-    }
-  end
-
-  def protips
-    @protips ||= Protip.tagged_with(self.tag_list, on: :topics)
   end
 
   def upvotes
@@ -201,14 +120,6 @@ class Network < ActiveRecord::Base
     Protip.search("sort:#{field} desc", self.tag_list, page: offset, per_page: limit)
   end
 
-  def mayor_protips(limit=nil, offset =0)
-    Protip.search_trending_by_user(self.mayor.username, nil, self.tag_list, offset, limit)
-  end
-
-  def expert_protips(limit=nil, offset =0)
-    Protip.search_trending_by_user(self.resident_expert.username, nil, self.tag_list, offset, limit)
-  end
-
   def members(limit = -1, offset = 0)
     members_scope = User.where(id: Follow.for_followable(self).pluck(:follower_id)).offset(offset)
     limit > 0 ? members_scope.limit(limit) : members_scope
@@ -216,22 +127,6 @@ class Network < ActiveRecord::Base
 
   def new_members(limit = nil, offset = 0)
     User.where(id: Follow.for_followable(self).where('follows.created_at > ?', 1.week.ago).pluck(:follower_id)).limit(limit).offset(offset)
-  end
-
-  def ranked_members(limit = 15)
-    self.in_line_to_the_throne.limit(limit).map(&:user)
-  end
-
-  def in_line_to_the_throne
-    self.protips.select('protips.user_id, SUM(protips.score) AS total_score').group('protips.user_id').order('SUM(protips.score) DESC').where('upvotes_value_cache > 0')
-  end
-
-  def resident_expert_from_env
-    ENV['RESIDENT_EXPERTS'].split(",").each do |expert_config|
-      network, resident_expert = expert_config.split(/:/).map(&:strip)
-      return User.find_by_username(resident_expert) if network == self.slug
-    end unless ENV['RESIDENT_EXPERTS'].nil?
-    nil
   end
 
   def assign_members

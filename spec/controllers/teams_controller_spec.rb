@@ -40,8 +40,8 @@ RSpec.describe TeamsController, type: :controller do
 
     it 'responds successfully with an HTTP 200 status code' do
       team = Fabricate(:team) do
-        name Faker::Company.name
-        slug Faker::Internet.user_name
+        name FFaker::Company.name
+        slug FFaker::Internet.user_name
       end
       get :show, slug: team.slug
       expect(response).to be_success
@@ -58,6 +58,13 @@ RSpec.describe TeamsController, type: :controller do
       team = Fabricate(:team)
       get :show, slug: team.slug, job_id: 'not-a-real-job-slug'
       expect(assigns(:job_page)).to eq(false)
+    end
+
+    context 'when searching by an out of bounds or non-integer id' do
+      it 'should render 404' do
+        get :show, id: '54209333547a9e5'
+        expect(response).to have_http_status(404)
+      end
     end
   end
 

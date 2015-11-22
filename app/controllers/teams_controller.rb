@@ -5,6 +5,7 @@ class TeamsController < ApplicationController
   respond_to :js, :only => [:search, :create, :approve_join, :deny_join]
   respond_to :json, :only => [:search]
 
+  # GET                   /teams(.:format)
   def index
     current_user.seen(:teams) if signed_in?
     #@featured_teams = Rails.cache.fetch(Team::FEATURED_TEAMS_CACHE_KEY, expires_in: 4.hours) do
@@ -15,24 +16,27 @@ class TeamsController < ApplicationController
     @teams = []
   end
 
+  # GET                   /teams/followed(.:format)
   def followed
     @teams = current_user.teams_being_followed
   end
 
+  # GET                   /team/:slug(/:job_id)(.:format)
+  # GET                   /team/:slug(.:format)
   def show
     #FIXME
     show_params = params.permit(:job_id, :refresh, :callback, :id, :slug)
     @team ||= team_from_params(slug: show_params[:slug], id: show_params[:id])
+    return render_404 unless @team
 
     respond_to do |format|
       format.html do
-        return render_404 if @team.nil?
 
         @team_protips = @team.trending_protips(4)
         @query = "team:#{@team.slug}"
         viewing_user.track_team_view!(@team) if viewing_user
         @team.viewed_by(viewing_user || session_id) unless is_admin?
-        @job = show_params[:job_id].nil? ? @team.jobs.sample : Opportunity.with_public_id(show_params[:job_id])
+        @job = show_params[:job_id].nil? ? @team.jobs.sample : Opportunity.find_by_public_id(show_params[:job_id])
 
         @other_jobs = @team.jobs.reject { |job| job.id == @job.id } unless @job.nil?
         @job_page = !@job.nil?
@@ -43,11 +47,7 @@ class TeamsController < ApplicationController
         options = { :expires_in => 5.minutes }
         options[:force] = true if !show_params[:refresh].blank?
         response = Rails.cache.fetch(['v1', 'team', show_params[:id], :json], options) do
-          begin
             @team.public_json
-          rescue ActiveRecord::RecordNotFound
-            return head(:not_found)
-          end
         end
         response = "#{show_params[:callback]}({\"data\":#{response}})" if show_params[:callback]
         render :json => response
@@ -55,10 +55,12 @@ class TeamsController < ApplicationController
     end
   end
 
+  # GET                   /teams/new(.:format)
   def new
     return redirect_to employers_path
   end
 
+  # POST                  /teams(.:format)
   def create
     team_params = params.require(:team).permit(:name, :slug, :show_similar, :join_team)
     team_name = team_params.fetch(:name, '')
@@ -90,6 +92,7 @@ class TeamsController < ApplicationController
   #team.name.gsub(/ \-\./, '.*')
   #end
 
+  # GET                   /team/:slug/edit(.:format)
   def edit
     @team = Team.find_by_slug(params[:slug])
     return head(:forbidden) unless current_user.belongs_to_team?(@team) || current_user.admin?
@@ -97,6 +100,7 @@ class TeamsController < ApplicationController
     show
   end
 
+  #                             PUT                   /teams/:id(.:format)                                   teams#update
   def update
     update_params = params.permit(:id, :_id, :job_id, :slug)
     update_team_params = params.require(:team).permit!
@@ -112,7 +116,7 @@ class TeamsController < ApplicationController
     @job = if update_params[:job_id].nil?
              @team.jobs.sample
            else
-             Opportunity.with_public_id(update_params[:job_id])
+             Opportunity.find_by_public_id(update_params[:job_id])
            end
 
     if @team.save
@@ -123,11 +127,13 @@ class TeamsController < ApplicationController
     else
       respond_with do |format|
         format.html { render(:action => :edit) }
-        format.js { render(:json => { errors: @team.errors.full_messages }.to_json, :status => :unprocessable_entity) }
+        #FIXME
+        format.js { render(json: {errors: @team.errors.full_messages} , status: :unprocessable_entity) }
       end
     end
   end
 
+  # POST                  /teams/:id/follow(.:format)
   def follow
     # TODO move to concern
     @team = if params[:id].present? && (params[:id].to_i rescue nil)
@@ -142,11 +148,12 @@ class TeamsController < ApplicationController
       current_user.follow_team!(@team)
     end
     respond_to do |format|
-      format.json { render json: { dom_id: dom_id(@team), following: current_user.following_team?(@team) }.to_json }
-      format.js { render json: { dom_id: dom_id(@team), following: current_user.following_team?(@team) }.to_json }
+      format.json { render json: { dom_id: dom_id(@team), following: current_user.following_team?(@team) } }
+      format.js { render json: { dom_id: dom_id(@team), following: current_user.following_team?(@team) } }
     end
   end
 
+  # GET                   /employers(.:format)
   def upgrade
     upgrade_params = params.permit(:discount)
 
@@ -159,6 +166,7 @@ class TeamsController < ApplicationController
     render :layout => 'product_description'
   end
 
+  # POST                  /teams/inquiry(.:format)
   def inquiry
     inquiry_params = params.permit(:email, :company)
 
@@ -168,6 +176,7 @@ class TeamsController < ApplicationController
     render :layout => 'product_description'
   end
 
+  # GET                   /teams/:id/accept(.:format)
   def accept
     apply_cache_buster
 
@@ -192,6 +201,7 @@ class TeamsController < ApplicationController
     redirect_to teamname_url(:slug => current_user.reload.team.slug)
   end
 
+  # GET                   /teams/search(.:format)
   def search
     search_params = params.permit(:q, :country, :page)
 
@@ -199,6 +209,7 @@ class TeamsController < ApplicationController
     respond_with @teams
   end
 
+  # POST                  /teams/:id/record-exit(.:format)
   def record_exit
     record_exit_params = params.permit(:id, :exit_url, :exit_target_type, :furthest_scrolled, :time_spent)
 
@@ -209,6 +220,7 @@ class TeamsController < ApplicationController
     render :nothing => true
   end
 
+  # GET                   /teams/:id/visitors(.:format)
   def visitors
     since = is_admin? ? 0 : 2.weeks.ago.to_i
     full = is_admin? && params[:full] == 'true'
@@ -219,6 +231,7 @@ class TeamsController < ApplicationController
     render :analytics unless full
   end
 
+  # POST                  /teams/:id/join(.:format)
   def join
     join_params = params.permit(:id)
 
@@ -230,6 +243,7 @@ class TeamsController < ApplicationController
     end
   end
 
+  # POST                  /teams/:id/join/:user_id/approve(.:format)
   def approve_join
     approve_join_params = params.permit(:id, :user_id)
 
@@ -240,6 +254,7 @@ class TeamsController < ApplicationController
     render :join_response
   end
 
+  # POST                  /teams/:id/join/:user_id/deny(.:format)
   def deny_join
     deny_join_params = params.permit(:id, :user_id)
 
@@ -256,8 +271,16 @@ class TeamsController < ApplicationController
     if opts[:slug].present?
       Team.where(slug: opts[:slug].downcase).first
     else
-      Team.find(opts[:id])
+      if valid_id?(opts[:id])
+        Team.find(opts[:id])
+      else
+        nil
+      end
     end
+  end
+
+  def valid_id?(id)
+    id.to_i.to_s == id && id.to_i < 2147483647
   end
 
   def replace_section(section_name)
@@ -289,13 +312,13 @@ class TeamsController < ApplicationController
   def next_job(job)
     jobs = job_public_ids
     public_id = job && jobs[(jobs.index(job.public_id) || -1)+1]
-    Opportunity.with_public_id(public_id) unless public_id.nil?
+    Opportunity.find_by_public_id(public_id) unless public_id.nil?
   end
 
   def previous_job(job)
     jobs = job_public_ids
     public_id = job && jobs[(jobs.index(job.public_id) || +1)-1]
-    Opportunity.with_public_id(public_id) unless public_id.nil?
+    Opportunity.find_by_public_id(public_id) unless public_id.nil?
   end
 
   def ensure_analytics_access

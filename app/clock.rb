@@ -15,10 +15,6 @@ every(1.day, 'protip_mailer:popular_protips', if: ->(t){ t.day == 1 }) do
   end
 end
 
-every(1.day, 'teams:refresh', at: '22:00') do
-  TeamsRefreshJob.perform_async
-end
-
 every(1.day, 'award:refresh:stale', at: '00:00') do
   RefreshStaleUsersWorker.perform_async
 end
@@ -38,10 +34,6 @@ end
 
 every(1.day, 'protips:recalculate_scores', at: '04:00') do
   ProtipsRecalculateScoresJob.perform_async
-end
-
-every(1.day, 'clear_expired_sessions', at: '05:00') do
-  ClearExpiredSessionsJob.perform_async
 end
 
 every(1.day, 'sitemap:refresh', at: '06:00') do

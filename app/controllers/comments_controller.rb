@@ -1,52 +1,46 @@
 class CommentsController < ApplicationController
 
-  before_action :access_required, only: [:new, :edit, :update, :destroy]
+  before_action :access_required, only: [:update, :destroy]
+
+  before_action :lookup_comment, only: [:edit, :update, :destroy, :like, :mark_as_spam]
   before_action :verify_ownership, only: [:edit, :update, :destroy]
-  before_action :require_admin!, only: [:flag, :index]
-  before_action :lookup_comment, only: [:edit, :update, :destroy, :like]
   before_action :lookup_protip, only: [:create]
+  before_action :require_moderator!, only: [:mark_as_spam]
 
-  def index
-    @comments = Comment.where('created_at > ?', 1.day.ago)
-  end
-
-  def new ; end
-
-  def edit ; end
-
+  # POST                  /p/:protip_id/comments(.:format)
   def create
-    create_comment_params = params.require(:comment).permit(:comment)
+    redirect_to_signup_if_unauthenticated(request.referer + "?" + (comment_params.try(:to_query) || ""), "You must signin/signup to add a comment") do
+      @comment = @protip.comments.build(comment_params)
 
-    redirect_to_signup_if_unauthenticated(request.referer + "?" + (create_comment_params.try(:to_query) || ""), "You must signin/signup to add a comment") do
-      @comment      = @protip.comments.build(create_comment_params)
       @comment.user = current_user
+      @comment.request_format = request.format.to_s
       respond_to do |format|
         if @comment.save
           record_event('created comment')
-          format.html { redirect_to protip_path(@comment.commentable.try(:public_id)) }
+          format.html { redirect_to protip_path(params[:protip_id]) }
           format.json { render json: @comment, status: :created, location: @comment }
         else
-          format.html { redirect_to protip_path(@comment.commentable.try(:public_id)), error: "could not add your comment. try again" }
+          format.html { redirect_to protip_path(params[:protip_id]), error: "could not add your comment. try again" }
           format.json { render json: @comment.errors, status: :unprocessable_entity }
         end
       end
     end
   end
 
+  # PUT                   /p/:protip_id/comments/:id(.:format)
   def update
-    update_comment_params = params.require(:comment).permit(:comment)
-
     respond_to do |format|
-      if @comment.update_attributes(update_comment_params)
-        format.html { redirect_to protip_path(@comment.commentable.try(:public_id)) }
+      if @comment.update_attributes(comment_params)
+        format.html { redirect_to protip_path(params[:protip_id]) }
         format.json { head :ok }
       else
-        format.html { redirect_to protip_path(@comment.commentable.try(:public_id)), error: "could not update your comment. try again" }
+        format.html { redirect_to protip_path(params[:protip_id]), error: "could not update your comment. try again" }
         format.json { render json: @comment.errors, status: :unprocessable_entity }
       end
     end
   end
 
+  # DELETE                /p/:protip_id/comments/:id(.:format)
   def destroy
     return head(:forbidden) if @comment.nil?
     @comment.destroy
@@ -56,6 +50,7 @@ class CommentsController < ApplicationController
     end
   end
 
+  # POST                  /p/:protip_id/comments/:id/like(.:format)
   def like
     redirect_to_signup_if_unauthenticated(request.referer, "You must signin/signup to like a comment") do
       @comment.like_by(current_user)
@@ -66,21 +61,31 @@ class CommentsController < ApplicationController
     end
   end
 
+  # POST                  /p/:protip_id/comments/:id/mark_as_spam(.:format)
+  def mark_as_spam
+    @comment.mark_as_spam
+    respond_to do |format|
+      format.json { head :ok }
+      format.js { head :ok }
+    end
+  end
+
   private
 
   def lookup_comment
-    id = params.permit(:id)[:id]
-    @comment = Comment.find(id)
-    lookup_protip
+    @comment = Comment.includes(:protip).find(params[:id])
+    @protip = @comment.protip
   end
 
   def lookup_protip
-    protip_id = params.permit(:protip_id)[:protip_id]
-    @protip = Protip.with_public_id(protip_id)
+    @protip = Protip.find_by_public_id(params[:protip_id])
   end
 
   def verify_ownership
-    lookup_comment
     redirect_to(root_url) unless (is_admin? or (@comment && @comment.authored_by?(current_user)))
+  end
+
+  def comment_params
+    params.require(:comment).permit(:comment)
   end
 end

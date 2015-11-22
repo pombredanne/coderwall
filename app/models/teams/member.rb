@@ -26,10 +26,18 @@ class Teams::Member < ActiveRecord::Base
   validates_uniqueness_of :user_id, scope: :team_id
   validates :team_id, :user_id, :presence => true
 
+  mount_uploader :team_avatar, AvatarUploader
+
+  mount_uploader :team_banner, BannerUploader
+  # process_in_background :team_banner, ResizeTiltShiftBannerJob
+
+
   scope :active, -> { where(state: 'active') }
   scope :pending, -> { where(state: 'pending') }
   scope :sorted, -> { active.joins(:user).order('users.score_cache DESC') }
   scope :top, ->(limit= 1) { sorted.limit(limit) }
+  scope :members, -> { where(role: 'member') }
+  scope :admins, -> { where(role: 'admin') }
 
   def score
     badges.all.sum(&:weight)
@@ -37,6 +45,10 @@ class Teams::Member < ActiveRecord::Base
 
   def display_name
     name || username
+  end
+
+  def admin?
+    role == 'admin'
   end
 
   %i(
@@ -55,7 +67,7 @@ class Teams::Member < ActiveRecord::Base
     delegate user_method, to: :user
   end
 
-  [:badges, :title, :endorsements].each do |m|
+  [:badges, :endorsements].each do |m|
     define_method(m) { user.try(m) }
   end
 end

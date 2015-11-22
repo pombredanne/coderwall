@@ -18,7 +18,13 @@
 #  boost_factor        :float            default(1.0)
 #  inappropriate       :integer          default(0)
 #  likes_count         :integer          default(0)
-#  slug                :string(255)
+#  slug                :string(255)      not null
+#  user_name           :string(255)
+#  user_email          :string(255)
+#  user_agent          :string(255)
+#  user_ip             :inet
+#  spam_reports_count  :integer          default(0)
+#  state               :string(255)      default("active")
 #
 
 require 'vcr_helper'
@@ -151,10 +157,9 @@ RSpec.describe Protip, type: :model do
     end
 
     it '#topic_ids should return ids of topics only' do
-      protip = Fabricate(:protip, topic_list: 'ruby, python', user: Fabricate(:user))
-      protip.save!
-      ruby_id = Tag.find_by_name("ruby").id
-      python_id = Tag.find_by_name("python").id
+      protip = Fabricate(:protip, topic_list: 'ruby, python', user: Fabricate.build(:user))
+      ruby_id = ActsAsTaggableOn::Tag.find_by_name("ruby").id
+      python_id = ActsAsTaggableOn::Tag.find_by_name("python").id
       expect(protip.topic_ids).to match_array([ruby_id, python_id])
     end
   end

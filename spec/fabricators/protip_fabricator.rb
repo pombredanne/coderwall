@@ -18,13 +18,19 @@
 #  boost_factor        :float            default(1.0)
 #  inappropriate       :integer          default(0)
 #  likes_count         :integer          default(0)
-#  slug                :string(255)
+#  slug                :string(255)      not null
+#  user_name           :string(255)
+#  user_email          :string(255)
+#  user_agent          :string(255)
+#  user_ip             :inet
+#  spam_reports_count  :integer          default(0)
+#  state               :string(255)      default("active")
 #
 
 Fabricator(:protip) do
   topic_list %w(Javascript CoffeeScript)
-  title { Faker::Company.catch_phrase }
-  body { Faker::Lorem.sentences(8).join(' ') }
+  title { FFaker::Company.catch_phrase }
+  body { FFaker::Lorem.sentences(8).join(' ') }
   user { Fabricate.build(:user) }
 end
 

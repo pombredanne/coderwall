@@ -14,7 +14,7 @@
 #  score                    :decimal(40, 30)  default(0.0)
 #  twitter                  :string(255)
 #  facebook                 :string(255)
-#  slug                     :string(255)
+#  slug                     :citext           not null
 #  premium                  :boolean          default(FALSE)
 #  analytics                :boolean          default(FALSE)
 #  valid_jobs               :boolean          default(FALSE)
@@ -44,7 +44,6 @@
 #  organization_way         :text
 #  organization_way_name    :text
 #  organization_way_photo   :text
-#  featured_links_title     :string(255)
 #  blog_feed                :text
 #  our_challenge            :text
 #  your_impact              :text
@@ -80,10 +79,11 @@ RSpec.describe Team, type: :model do
 
   it { is_expected.to have_one :account }
   it { is_expected.to have_many :locations }
-  it { is_expected.to have_many :links }
   it { is_expected.to have_many :members }
   it { is_expected.to have_many :jobs }
   it { is_expected.to have_many :followers }
+  it { is_expected.to respond_to :admins }
+  it { is_expected.to respond_to :admin_accounts }
 
   describe '#with_similar_names' do
     let!(:team_1) { Fabricate(:team, name: 'dream_team') }
@@ -158,11 +158,6 @@ RSpec.describe Team, type: :model do
     team.name = 'something-else'
     team.save!
     expect(Rails.cache.fetch(Team::FEATURED_TEAMS_CACHE_KEY)).to eq('test')
-  end
-
-  it 'should be able to add team link' do
-    team.links.create(name: 'Google', url: 'http://www.google.com')
-    expect(team.featured_links.size).to eq(1)
   end
 
   def seed_plans!(reset = false)

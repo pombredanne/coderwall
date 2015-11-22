@@ -7,6 +7,7 @@ class ApplicationController < ActionController::Base
   helper_method :current_user
   helper_method :viewing_self?
   helper_method :is_admin?
+  helper_method :is_moderator?
   helper_method :viewing_user
   helper_method :round
 
@@ -106,8 +107,6 @@ class ApplicationController < ActionController::Base
 
   def sign_out
     record_event("signed out")
-    @current_user          = nil
-    session[:current_user] = nil
     cookies.delete(:signedin)
     reset_session
   end
@@ -195,11 +194,19 @@ class ApplicationController < ActionController::Base
   end
 
   def require_admin!
-    return head(:forbidden) unless signed_in? && current_user.admin?
+    return head(:forbidden) unless is_admin?
   end
 
   def is_admin?
-    signed_in? && current_user.admin?
+    signed_in? && current_user.role == 'admin'
+  end
+
+  def is_moderator?
+    signed_in? && current_user.role.in?(%w(admin moderator))
+  end
+
+  def require_moderator!
+    return head(:forbidden) unless is_moderator?
   end
 
   def iphone_user_agent?

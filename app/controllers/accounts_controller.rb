@@ -6,23 +6,21 @@ class AccountsController < ApplicationController
   before_action :determine_plan, only: [:create, :update]
   before_action :ensure_eligibility, only: [:new]
 
+  # GET                   /teams/:team_id/account/new(.:format)
   def new
     @account ||= current_user.team.build_account
     @plan    = params[:public_id]
   end
 
+  # POST                  /teams/:team_id/account(.:format)
   def create
     redirect_to teamname_path(slug: @team.slug) if @plan.free?
 
-    @account           = @team.build_account(account_params)
-    @account.admin_id  = current_user.id
-    # TODO: (whatupdave) this doesn't look like it's being used any more. Remove if possible
-    # @account.trial_end = Date.new(2013, 1, 1).to_time.to_i if session[:discount] == ENV['DISCOUNT_TOKEN']
+    @account = @team.build_account(account_params)
 
     if @account.save_with_payment(@plan)
       unless @team.is_member?(current_user)
-        @team.add_member(current_user)
-        @team.save
+        @team.add_member(current_user,:active)
       end
       record_event('upgraded team')
 
@@ -35,6 +33,7 @@ class AccountsController < ApplicationController
     end
   end
 
+  # PUT                   /teams/:team_id/account(.:format)
   def update
     if @account.update_attributes(account_params) && @account.save_with_payment(@plan)
       redirect_to new_team_opportunity_path(@team), notice: "You are subscribed to #{@plan.name}." + plan_capability(@plan, @team)
@@ -44,6 +43,7 @@ class AccountsController < ApplicationController
     end
   end
 
+  # GET                   /webhooks/stripe(.:format)
   def webhook
     data = JSON.parse request.body.read
     if data[:type] == "invoice.payment_succeeded"
@@ -59,11 +59,12 @@ class AccountsController < ApplicationController
     end
   end
 
+  # POST                  /teams/:team_id/account/send_invoice(.:format)
   def send_invoice
     team, period = Team.find(params[:team_id]), 1.month.ago
 
     if team.account.send_invoice_for(period)
-      flash[:notice] = "sent invoice for #{period.strftime("%B")} to #{team.account.admin.email}"
+      flash[:notice] = "sent invoice for #{period.strftime("%B")} to the team's admins "
     else
       flash[:error] = 'There was an error in sending an invoice'
     end
@@ -73,13 +74,16 @@ class AccountsController < ApplicationController
 
   private
   def lookup_account
-    @team = (current_user && current_user.team) || (params[:team_id] && Team.find(params[:team_id]))
-    return redirect_to employers_path if @team.nil?
+    begin
+      @team = Team.includes(:account).find(params[:team_id])
+    rescue ActiveRecord::RecordNotFound
+      redirect_to employers_path if @team.nil?
+    end
     @account = @team.account
   end
 
   def ensure_account_admin
-    is_admin? || current_user.team && current_user.team.admin?(current_user)
+    is_admin? || @team.admins.exists?(user_id: current_user)
   end
 
   def determine_plan

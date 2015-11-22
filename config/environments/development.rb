@@ -1,5 +1,5 @@
 Coderwall::Application.configure do
-  config.threadsafe! unless $rails_rake_task
+  config.eager_load = true
 
   require 'sidekiq/testing/inline'
 
@@ -28,12 +28,27 @@ Coderwall::Application.configure do
   # with SQLite, MySQL, and PostgreSQL)
   # config.active_record.auto_explain_threshold_in_seconds = 0.5
 
-  # Move cache dir's out of vagrant NFS directory
-  config.cache_store                           = [:file_store,"/tmp/codewall-cache/"]
-  config.assets.cache_store                    = [:file_store,"/tmp/codewall-cache/assets/"]
-  Rails.application.config.sass.cache_location = "/tmp/codewall-cache/sass/"
-
-  BetterErrors::Middleware.allow_ip! ENV['TRUSTED_IP'] if ENV['TRUSTED_IP']
-  #Rails.logger = Logger.new(STDOUT)
-  #Rails.logger.level = Logger::DEBUG
+  # Mock account credentials
+  OmniAuth.config.test_mode = true
+  OmniAuth.config.mock_auth[:linkedin] = OmniAuth::AuthHash.new({
+    :provider => 'linkedin',
+    :uid => 'linkedin12345',
+    :info => {:nickname => 'linkedinuser'},
+    :credentials => {
+      :token => 'linkedin1',
+      :secret => 'secret'}})
+  OmniAuth.config.mock_auth[:twitter] = OmniAuth::AuthHash.new({
+    :provider => 'twitter', 
+    :uid => 'twitter123545', 
+    :info => {:nickname => 'twitteruser'}, 
+    :credentials => {
+      :token => 'twitter1', 
+      :secret => 'secret'}})
+  OmniAuth.config.mock_auth[:github] = OmniAuth::AuthHash.new({
+    :provider => 'github', 
+    :uid => 'github123545', 
+    :info => {:nickname => 'githubuser'}, 
+    :credentials => {
+      :token => 'github1', 
+      :secret => 'secret'}})
 end

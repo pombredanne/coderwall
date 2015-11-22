@@ -14,7 +14,7 @@
 #  score                    :decimal(40, 30)  default(0.0)
 #  twitter                  :string(255)
 #  facebook                 :string(255)
-#  slug                     :string(255)
+#  slug                     :citext           not null
 #  premium                  :boolean          default(FALSE)
 #  analytics                :boolean          default(FALSE)
 #  valid_jobs               :boolean          default(FALSE)
@@ -44,7 +44,6 @@
 #  organization_way         :text
 #  organization_way_name    :text
 #  organization_way_photo   :text
-#  featured_links_title     :string(255)
 #  blog_feed                :text
 #  our_challenge            :text
 #  your_impact              :text
@@ -73,6 +72,6 @@
 #
 
 Fabricator(:team, from: 'Team') do
-  name { Faker::Company.name }
+  name { FFaker::Company.name }
   account { Fabricate.build(:account) }
 end

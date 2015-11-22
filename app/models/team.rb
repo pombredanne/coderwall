@@ -14,7 +14,7 @@
 #  score                    :decimal(40, 30)  default(0.0)
 #  twitter                  :string(255)
 #  facebook                 :string(255)
-#  slug                     :string(255)
+#  slug                     :citext           not null
 #  premium                  :boolean          default(FALSE)
 #  analytics                :boolean          default(FALSE)
 #  valid_jobs               :boolean          default(FALSE)
@@ -44,7 +44,6 @@
 #  organization_way         :text
 #  organization_way_name    :text
 #  organization_way_photo   :text
-#  featured_links_title     :string(255)
 #  blog_feed                :text
 #  our_challenge            :text
 #  your_impact              :text
@@ -80,35 +79,40 @@ class Team < ActiveRecord::Base
   FEATURED_TEAMS_CACHE_KEY = 'featured_teams_results'
   MAX_TEAM_SCORE           = 400
 
-  self.table_name = 'teams'
-
   include TeamAnalytics
-  include TeamMigration
 
   include TeamSearch
+  include Blog
   include SearchModule
 
   mount_uploader :avatar, TeamUploader
 
+  has_many :invitations
+  has_many :opportunities, dependent: :destroy
   has_many :followers, through: :follows, source: :team
   has_many :follows,   class_name: 'FollowedTeam',    foreign_key: 'team_id', dependent: :destroy
   has_many :jobs,      class_name: 'Opportunity',     foreign_key: 'team_id', dependent: :destroy
-  has_many :links,     class_name: 'Teams::Link',     foreign_key: 'team_id', dependent: :delete_all
-  has_many :locations, class_name: 'Teams::Location', foreign_key: 'team_id', dependent: :delete_all
-  has_many :members,   class_name: 'Teams::Member',   foreign_key: 'team_id', dependent: :delete_all
-  has_many :member_accounts, through: :members, source: :user, class_name: 'User'
-  has_one :account,    class_name: 'Teams::Account',  foreign_key: 'team_id', dependent: :delete
+  has_many :locations, class_name: 'Teams::Location', foreign_key: 'team_id'
+  has_many :members,   class_name: 'Teams::Member',   foreign_key: 'team_id'
+  def admins
+    members.admins
+  end
 
-  accepts_nested_attributes_for :locations, :links, allow_destroy: true, reject_if: :all_blank
+  has_many :member_accounts, through: :members, source: :user, class_name: 'User'
+  def admin_accounts
+    member_accounts.where("teams_members.role = 'admin'")
+  end
+
+  has_one :account,    class_name: 'Teams::Account',  foreign_key: 'team_id'
+
+  accepts_nested_attributes_for :locations, allow_destroy: true, reject_if: :all_blank
 
   before_validation :create_slug!
   before_validation :fix_website_url!
-  before_save :update_team_size!
   before_save :clear_cache_if_premium_team
   after_create :generate_event
   after_save :reindex_search
   after_destroy :reindex_search
-  after_destroy :remove_dependencies
 
   validates :slug, uniqueness: true, presence: true
   validates :name, presence: true
@@ -119,20 +123,12 @@ class Team < ActiveRecord::Base
     members.first(3)
   end
 
-  def featured_links
-    links
-  end
-
   def sorted_team_members
     members.sorted
   end
 
-  def admins
-    members.where(role: :admin)
-  end
-
   def all_jobs
-    jobs.order('created_at DESC')
+    jobs.order(:created_at).reverse_order
   end
 
   def self.search(query_string, country, page, per_page, search_type = :query_and_fetch)
@@ -173,8 +169,7 @@ class Team < ActiveRecord::Base
   end
 
   def self.with_similar_names(name)
-    pattern = "%#{name}%"
-    Team.where('name ilike ?', pattern).limit(3).to_a
+    Team.where('name ilike ?', "%#{name}%").limit(3).to_a
   end
 
   def self.with_completed_section(section)
@@ -290,7 +285,7 @@ class Team < ActiveRecord::Base
     top_three_members.map do |member|
       {
         username:    member.username,
-        profile_url: member.user.profile_url,
+        profile_url: member.user.avatar_url,
         avatar:      ApplicationController.helpers.users_image_path(member)
       }
     end
@@ -317,7 +312,7 @@ class Team < ActiveRecord::Base
 
   def public_hash
     summary.merge(
-      members: members.collect { |user| {
+      members: member_accounts.collect { |user| {
         name:               user.display_name,
         username:           user.username,
         badges_count:       user.badges_count,
@@ -395,16 +390,8 @@ class Team < ActiveRecord::Base
     !locations.blank?
   end
 
-  def has_featured_links?
-    !featured_links.blank?
-  end
-
   def has_upcoming_events?
     false
-  end
-
-  def has_team_blog?
-    !blog_feed.blank?
   end
 
   def has_achievements?
@@ -419,7 +406,7 @@ class Team < ActiveRecord::Base
     @specialties_with_counts ||= begin
                                    specialties = {}
 
-                                   members.each do |user|
+                                   member_accounts.each do |user|
                                      user.speciality_tags.each do |tag|
                                        tag              = tag.downcase
                                        specialties[tag] = 0 if specialties[tag].blank?
@@ -493,10 +480,6 @@ class Team < ActiveRecord::Base
     members.count
   end
 
-  def total_highlights_count
-    members.collect { |u| u.highlights.count }.sum
-  end
-
   def team_size_threshold
     if size >= 3
       3
@@ -513,9 +496,6 @@ class Team < ActiveRecord::Base
     return val unless val == 0
 
     val = size <=> y.size
-    return val unless val == 0
-
-    val = total_highlights_count <=> y.total_highlights_count
     return val unless val == 0
 
     id.to_s <=> y.id.to_s
@@ -614,7 +594,7 @@ class Team < ActiveRecord::Base
   end
 
   def has_user_with_referral_token?(token)
-    members.collect(&:referral_token).include?(token)
+    member_accounts.exists?(referral_token: token)
   end
 
   def impressions_key
@@ -739,13 +719,6 @@ class Team < ActiveRecord::Base
     end
   end
 
-  def remove_dependencies
-    [FollowedTeam, Invitation, Opportunity, SeizedOpportunity].each do |klass|
-      klass.where(team_id: self.id.to_s).delete_all
-    end
-    User.where(team_id: self.id.to_s).update_all('team_id = NULL')
-  end
-
   def can_post_job?
     has_monthly_subscription? || paid_job_posts > 0
   end
@@ -772,17 +745,6 @@ class Team < ActiveRecord::Base
 
   def stack
     @stack_list ||= (self.stack_list || "").split(/,/)
-  end
-
-  def blog
-    unless self.blog_feed.blank?
-      feed = Feedjira::Feed.fetch_and_parse(self.blog_feed)
-      feed unless feed.is_a?(Fixnum)
-    end
-  end
-
-  def blog_posts
-    @blog_posts ||= blog.try(:entries) || []
   end
 
   def plan
@@ -856,16 +818,11 @@ class Team < ActiveRecord::Base
     user.is_a?(User) ? user.id : user
   end
 
-  #Replaced with team_size attribute
-  def update_team_size!
-    self.size = User.where(team_id: self.id.to_s).count
-  end
-
   def clear_cache_if_premium_team
     Rails.cache.delete(Team::FEATURED_TEAMS_CACHE_KEY) if premium?
   end
 
   def create_slug!
-    self.slug = self.class.slugify(name)
+    self.slug ||= self.class.slugify(name)
   end
 end

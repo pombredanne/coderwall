@@ -51,7 +51,6 @@
 #  linkedin_secret               :string(255)
 #  last_email_sent               :datetime
 #  linkedin_public_url           :string(255)
-#  redemptions                   :text
 #  endorsements_count            :integer          default(0)
 #  team_document_id              :string(255)
 #  speakerdeck                   :string(255)
@@ -68,7 +67,6 @@
 #  tracking_code                 :string(255)
 #  utm_campaign                  :string(255)
 #  score_cache                   :float            default(0.0)
-#  gender                        :string(255)
 #  notify_on_follow              :boolean          default(TRUE)
 #  api_key                       :string(255)
 #  remind_to_create_team         :datetime
@@ -104,25 +102,25 @@
 #  last_ip                       :string(255)
 #  last_ua                       :string(255)
 #  team_id                       :integer
+#  role                          :string(255)      default("user")
 #
 
 Fabricator(:user, from: 'User') do
   github { 'mdeiters' }
   twitter { 'mdeiters' }
-  username { Faker::Internet.user_name.gsub(/\./, '_') }
+  username { FFaker::Internet.user_name.gsub(/\./, '_') }
   name { 'Matthew Deiters' }
   email { 'someone@example.com' }
   location { 'San Francisco' }
-  github_token { Faker::Internet.ip_v4_address }
+  github_token { FFaker::Internet.ip_v4_address }
   state { User::ACTIVE }
 end
 
-Fabricator(:pending_user, from: 'User') do
-  github { 'bguthrie' }
-  username { Faker::Internet.user_name.gsub(/\./, '_') }
-  name { 'Brian Guthrie' }
-  email { 'someone@example.com' }
-  location { 'Mountain View' }
-  github_token { Faker::Internet.ip_v4_address }
+Fabricator(:pending_user, from: :user) do
   state { User::PENDING }
+end
+
+Fabricator(:admin, from: :user ) do
+  email { FFaker::Internet.email('admin') }
+  role 'admin'
 end
